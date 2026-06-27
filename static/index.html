@@ -1,0 +1,909 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Travel Itinerary Planner</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      display: flex;
+      height: 100vh;
+      overflow: hidden;
+      background: #f1f5f9;
+      color: #1e293b;
+    }
+
+    /* ── Sidebar ─────────────────────────────────────────── */
+    #sidebar {
+      width: 340px;
+      min-width: 340px;
+      background: #0f172a;
+      color: #e2e8f0;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    #sidebar-header {
+      padding: 20px 20px 14px;
+      font-size: 1.15rem;
+      font-weight: 700;
+      color: #fff;
+      border-bottom: 1px solid #1e293b;
+      flex-shrink: 0;
+    }
+    #sidebar-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 16px 20px 20px;
+      display: flex;
+      flex-direction: column;
+      gap: 18px;
+    }
+    #sidebar-body::-webkit-scrollbar { width: 4px; }
+    #sidebar-body::-webkit-scrollbar-thumb { background: #334155; border-radius: 4px; }
+
+    .section-label {
+      font-size: 0.7rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
+      color: #64748b;
+      margin-bottom: 8px;
+    }
+
+    label { font-size: 0.82rem; color: #94a3b8; display: block; margin-bottom: 4px; }
+
+    input[type="text"], input[type="number"], input[type="date"],
+    select, textarea {
+      width: 100%;
+      background: #1e293b;
+      border: 1px solid #334155;
+      color: #e2e8f0;
+      border-radius: 6px;
+      padding: 7px 10px;
+      font-size: 0.85rem;
+      outline: none;
+      transition: border-color 0.15s;
+    }
+    input:focus, select:focus, textarea:focus { border-color: #3b82f6; }
+    textarea { resize: vertical; min-height: 60px; }
+    input[type="date"]::-webkit-calendar-picker-indicator { filter: invert(1); }
+
+    .row { display: flex; gap: 8px; }
+    .row > * { flex: 1; }
+
+    /* Destinations */
+    #destinations-list { display: flex; flex-direction: column; gap: 6px; }
+    .dest-row { display: flex; gap: 6px; align-items: center; }
+    .dest-row input { flex: 1; }
+    .dest-remove {
+      background: #dc2626; border: none; color: #fff; border-radius: 5px;
+      width: 26px; height: 26px; cursor: pointer; font-size: 1rem; flex-shrink: 0;
+    }
+    #btn-add-city {
+      margin-top: 6px; background: #1e293b; border: 1px dashed #334155;
+      color: #94a3b8; border-radius: 6px; padding: 6px; width: 100%;
+      cursor: pointer; font-size: 0.82rem; transition: border-color 0.15s;
+    }
+    #btn-add-city:hover { border-color: #3b82f6; color: #e2e8f0; }
+
+    /* Checkboxes */
+    .checkbox-grid { display: flex; flex-direction: column; gap: 5px; }
+    .checkbox-grid label {
+      display: flex; align-items: center; gap: 8px;
+      color: #cbd5e1; cursor: pointer; font-size: 0.82rem; margin: 0;
+    }
+    .checkbox-grid input[type="checkbox"] {
+      width: auto; border: none; accent-color: #3b82f6;
+    }
+
+    /* Fitness slider */
+    .fitness-wrap { display: flex; flex-direction: column; gap: 4px; }
+    .fitness-labels { display: flex; justify-content: space-between; font-size: 0.7rem; color: #64748b; }
+    input[type="range"] {
+      -webkit-appearance: none; appearance: none; height: 4px;
+      background: #334155; border-radius: 2px; border: none; padding: 0;
+    }
+    input[type="range"]::-webkit-slider-thumb {
+      -webkit-appearance: none; width: 14px; height: 14px;
+      border-radius: 50%; background: #3b82f6; cursor: pointer;
+    }
+
+    /* Budget */
+    .budget-range { display: flex; gap: 8px; align-items: center; }
+    .budget-range input { flex: 1; }
+    .budget-range span { color: #64748b; font-size: 0.8rem; flex-shrink: 0; }
+
+    /* Generate button */
+    #btn-generate {
+      background: #3b82f6; color: #fff; border: none; border-radius: 8px;
+      padding: 12px; font-size: 0.95rem; font-weight: 600; cursor: pointer;
+      transition: background 0.15s; width: 100%;
+    }
+    #btn-generate:hover:not(:disabled) { background: #2563eb; }
+    #btn-generate:disabled { background: #334155; color: #64748b; cursor: not-allowed; }
+
+    /* ── Main ────────────────────────────────────────────── */
+    #main {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    #main-header {
+      padding: 20px 28px 14px;
+      border-bottom: 1px solid #e2e8f0;
+      background: #fff;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-shrink: 0;
+    }
+    #main-header h1 { font-size: 1.3rem; font-weight: 700; }
+
+    #main-body {
+      flex: 1;
+      overflow-y: auto;
+      padding: 24px 28px;
+    }
+
+    /* Empty state */
+    #empty-state {
+      display: flex; flex-direction: column; align-items: center;
+      justify-content: center; height: 100%; color: #94a3b8; text-align: center; gap: 12px;
+    }
+    #empty-state .icon { font-size: 3rem; }
+    #empty-state p { font-size: 0.95rem; max-width: 300px; line-height: 1.5; }
+
+    /* Loading panel */
+    #loading-panel {
+      display: none;
+      background: #fff; border-radius: 12px; border: 1px solid #e2e8f0;
+      padding: 24px; box-shadow: 0 4px 24px rgba(0,0,0,0.07);
+    }
+    #loading-panel h2 { font-size: 1.1rem; font-weight: 700; margin-bottom: 20px; }
+    .step {
+      display: flex; align-items: flex-start; gap: 12px;
+      padding: 10px 0; border-bottom: 1px solid #f1f5f9;
+    }
+    .step:last-of-type { border-bottom: none; }
+    .step-icon {
+      width: 24px; height: 24px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.75rem; font-weight: 700; margin-top: 1px;
+    }
+    .step-icon.pending { background: #e2e8f0; color: #94a3b8; }
+    .step-icon.active { background: #dbeafe; color: #3b82f6; animation: pulse 1s infinite; }
+    .step-icon.done { background: #dcfce7; color: #16a34a; }
+    .step-icon.skip { background: #fef9c3; color: #ca8a04; }
+    @keyframes pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.5; } }
+    .step-label { font-weight: 600; font-size: 0.88rem; }
+    .step-sub { font-size: 0.78rem; color: #64748b; margin-top: 2px; }
+    #stream-preview {
+      margin-top: 20px; max-height: 260px; overflow-y: auto;
+      background: #f8fafc; border-radius: 8px; padding: 14px;
+      font-size: 0.82rem; line-height: 1.6; color: #475569;
+      border: 1px solid #e2e8f0;
+    }
+    #stream-preview::-webkit-scrollbar { width: 3px; }
+    #stream-preview::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 2px; }
+
+    /* Tabs */
+    #tabs-panel { display: none; }
+    .tab-bar {
+      display: flex; gap: 4px; margin-bottom: 20px;
+      border-bottom: 2px solid #e2e8f0; padding-bottom: 0;
+    }
+    .tab-btn {
+      padding: 8px 18px; border: none; background: none; cursor: pointer;
+      font-size: 0.9rem; font-weight: 600; color: #94a3b8;
+      border-bottom: 2px solid transparent; margin-bottom: -2px;
+      transition: color 0.15s, border-color 0.15s;
+    }
+    .tab-btn.active { color: #3b82f6; border-bottom-color: #3b82f6; }
+    .tab-content { display: none; }
+    .tab-content.active { display: block; }
+
+    /* Itinerary */
+    #itinerary-content {
+      background: #fff; border-radius: 10px; padding: 28px;
+      border: 1px solid #e2e8f0; line-height: 1.8;
+    }
+    #itinerary-content h1 { font-size: 1.4rem; margin: 24px 0 8px; color: #0f172a; }
+    #itinerary-content h2 { font-size: 1.15rem; margin: 20px 0 8px; color: #1e40af; border-bottom: 1px solid #dbeafe; padding-bottom: 4px; }
+    #itinerary-content h3 { font-size: 1rem; margin: 14px 0 6px; color: #374151; }
+    #itinerary-content p { margin-bottom: 8px; color: #374151; }
+    #itinerary-content ul, #itinerary-content ol { padding-left: 20px; margin-bottom: 8px; }
+    #itinerary-content li { margin-bottom: 4px; color: #374151; }
+    #itinerary-content strong { color: #0f172a; }
+    #itinerary-content hr { border: none; border-top: 1px solid #e2e8f0; margin: 20px 0; }
+
+    #download-btn {
+      margin-top: 16px; background: #f1f5f9; border: 1px solid #e2e8f0;
+      border-radius: 8px; padding: 9px 18px; font-size: 0.85rem;
+      font-weight: 600; cursor: pointer; color: #374151; transition: background 0.15s;
+    }
+    #download-btn:hover { background: #e2e8f0; }
+
+    /* Budget dashboard */
+    .metrics-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+    .metric-card {
+      background: #fff; border-radius: 10px; border: 1px solid #e2e8f0;
+      padding: 16px 18px;
+    }
+    .metric-label { font-size: 0.75rem; color: #64748b; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 6px; }
+    .metric-value { font-size: 1.3rem; font-weight: 700; color: #0f172a; }
+    .metric-sub { font-size: 0.75rem; color: #64748b; margin-top: 2px; }
+    .metric-sub.over { color: #dc2626; }
+    .metric-sub.under { color: #16a34a; }
+
+    .chart-card {
+      background: #fff; border-radius: 10px; border: 1px solid #e2e8f0;
+      padding: 20px; margin-bottom: 20px;
+    }
+    .chart-card h3 { font-size: 0.95rem; font-weight: 700; margin-bottom: 16px; color: #0f172a; }
+
+    .cat-row { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px; margin-bottom: 24px; }
+    .cat-card {
+      background: #fff; border-radius: 10px; border: 1px solid #e2e8f0;
+      padding: 14px 16px;
+    }
+    .cat-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 6px; }
+    .cat-label { font-size: 0.8rem; font-weight: 600; color: #374151; margin-bottom: 6px; }
+    .cat-value { font-size: 1.1rem; font-weight: 700; color: #0f172a; }
+    .cat-pct { font-size: 0.75rem; color: #64748b; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 0.84rem; }
+    th { background: #f8fafc; font-weight: 700; color: #475569; padding: 10px 12px; text-align: left; border-bottom: 2px solid #e2e8f0; }
+    td { padding: 9px 12px; border-bottom: 1px solid #f1f5f9; color: #374151; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f8fafc; }
+    td.highlight { background: #f0fdf4; font-weight: 600; color: #15803d; }
+
+    /* Chat */
+    #chat-section {
+      display: none; margin-top: 28px; background: #fff;
+      border-radius: 10px; border: 1px solid #e2e8f0; overflow: hidden;
+    }
+    #chat-header {
+      padding: 14px 20px; border-bottom: 1px solid #f1f5f9;
+      font-weight: 700; font-size: 0.9rem; background: #f8fafc;
+    }
+    #chat-messages {
+      max-height: 320px; overflow-y: auto; padding: 16px 20px;
+      display: flex; flex-direction: column; gap: 12px;
+    }
+    #chat-messages::-webkit-scrollbar { width: 4px; }
+    #chat-messages::-webkit-scrollbar-thumb { background: #e2e8f0; border-radius: 2px; }
+    .chat-msg { display: flex; gap: 10px; align-items: flex-start; }
+    .chat-msg.user { flex-direction: row-reverse; }
+    .chat-avatar {
+      width: 28px; height: 28px; border-radius: 50%; flex-shrink: 0;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 0.7rem; font-weight: 700;
+    }
+    .chat-msg.user .chat-avatar { background: #3b82f6; color: #fff; }
+    .chat-msg.assistant .chat-avatar { background: #e2e8f0; color: #475569; }
+    .chat-bubble {
+      max-width: 75%; padding: 10px 14px; border-radius: 12px; font-size: 0.85rem; line-height: 1.5;
+    }
+    .chat-msg.user .chat-bubble { background: #3b82f6; color: #fff; border-top-right-radius: 3px; }
+    .chat-msg.assistant .chat-bubble { background: #f1f5f9; color: #374151; border-top-left-radius: 3px; }
+    #chat-input-row {
+      display: flex; gap: 8px; padding: 12px 16px;
+      border-top: 1px solid #f1f5f9;
+    }
+    #chat-input {
+      flex: 1; background: #f8fafc; border: 1px solid #e2e8f0;
+      border-radius: 8px; padding: 9px 13px; font-size: 0.88rem;
+      color: #1e293b; outline: none;
+    }
+    #chat-input:focus { border-color: #3b82f6; }
+    #chat-send {
+      background: #3b82f6; color: #fff; border: none; border-radius: 8px;
+      padding: 9px 16px; font-size: 0.88rem; font-weight: 600; cursor: pointer;
+      transition: background 0.15s;
+    }
+    #chat-send:hover:not(:disabled) { background: #2563eb; }
+    #chat-send:disabled { background: #e2e8f0; color: #94a3b8; cursor: not-allowed; }
+
+    .weather-badge {
+      display: inline-flex; align-items: center; gap: 5px;
+      background: #dbeafe; color: #1d4ed8; border-radius: 6px;
+      padding: 3px 10px; font-size: 0.75rem; font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+
+<!-- ── Sidebar ──────────────────────────────────────────── -->
+<aside id="sidebar">
+  <div id="sidebar-header">✈️ Travel Planner</div>
+  <div id="sidebar-body">
+
+    <div>
+      <div class="section-label">Destinations</div>
+      <div id="destinations-list">
+        <div class="dest-row"><input type="text" placeholder="City, Country" /></div>
+      </div>
+      <button id="btn-add-city" onclick="addDestination()">+ Add City</button>
+    </div>
+
+    <div>
+      <div class="section-label">Dates</div>
+      <div class="row">
+        <div><label>Start</label><input type="date" id="start-date" /></div>
+        <div><label>End</label><input type="date" id="end-date" /></div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Group</div>
+      <div class="row">
+        <div><label>Adults</label><input type="number" id="adults" value="1" min="1" max="20" /></div>
+        <div><label>Children</label><input type="number" id="children" value="0" min="0" max="20" oninput="toggleChildAges()" /></div>
+        <div><label>Elderly</label><input type="number" id="elderly" value="0" min="0" max="20" /></div>
+      </div>
+      <div id="children-ages-row" style="display:none; margin-top:8px;">
+        <label>Children's ages</label>
+        <input type="text" id="children-ages" placeholder="e.g. 3, 7, 12" />
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Budget</div>
+      <label>Currency</label>
+      <select id="currency">
+        <option>USD</option><option>EUR</option><option>GBP</option>
+        <option>CAD</option><option>AUD</option><option>JPY</option><option>INR</option>
+      </select>
+      <div style="margin-top:8px;">
+        <label>Budget range</label>
+        <div class="budget-range">
+          <input type="number" id="budget-min" value="1000" min="0" step="100" placeholder="Min" />
+          <span>–</span>
+          <input type="number" id="budget-max" value="5000" min="0" step="100" placeholder="Max" />
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Dietary Restrictions</div>
+      <div class="checkbox-grid">
+        <label><input type="checkbox" value="Vegetarian" class="dietary" /> Vegetarian</label>
+        <label><input type="checkbox" value="Vegan" class="dietary" /> Vegan</label>
+        <label><input type="checkbox" value="Gluten-free" class="dietary" /> Gluten-free</label>
+        <label><input type="checkbox" value="Halal" class="dietary" /> Halal</label>
+        <label><input type="checkbox" value="Kosher" class="dietary" /> Kosher</label>
+        <label><input type="checkbox" value="Nut allergy" class="dietary" /> Nut allergy</label>
+        <label><input type="checkbox" value="Dairy-free" class="dietary" /> Dairy-free</label>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Accessibility Needs</div>
+      <div class="checkbox-grid">
+        <label><input type="checkbox" value="Wheelchair accessible" class="mobility" /> Wheelchair accessible</label>
+        <label><input type="checkbox" value="Limited walking" class="mobility" /> Limited walking</label>
+        <label><input type="checkbox" value="No stairs" class="mobility" /> No stairs</label>
+        <label><input type="checkbox" value="Hearing impaired" class="mobility" /> Hearing impaired</label>
+        <label><input type="checkbox" value="Vision impaired" class="mobility" /> Vision impaired</label>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Fitness Level</div>
+      <div class="fitness-wrap">
+        <input type="range" id="fitness" min="0" max="4" value="2" />
+        <div class="fitness-labels">
+          <span>Very low</span><span>Low</span><span>Moderate</span><span>High</span><span>Very high</span>
+        </div>
+      </div>
+    </div>
+
+    <div>
+      <div class="section-label">Other Restrictions</div>
+      <input type="text" id="other-restrictions" placeholder="e.g. no alcohol, fear of heights" />
+    </div>
+
+    <div>
+      <div class="section-label">Interests</div>
+      <label>Must-see places or activities</label>
+      <textarea id="must-dos" placeholder="e.g. Eiffel Tower, sushi-making class"></textarea>
+      <label style="margin-top:8px;">General interests</label>
+      <textarea id="general-interests" placeholder="e.g. street food, architecture, nightlife"></textarea>
+    </div>
+
+    <button id="btn-generate" onclick="handleGenerate()">Generate Itinerary</button>
+
+  </div>
+</aside>
+
+<!-- ── Main ─────────────────────────────────────────────── -->
+<div id="main">
+  <div id="main-header">
+    <h1>Your Itinerary</h1>
+    <div id="weather-badge" style="display:none;" class="weather-badge">🌤 Live weather included</div>
+  </div>
+  <div id="main-body">
+
+    <!-- Empty state -->
+    <div id="empty-state">
+      <div class="icon">🗺️</div>
+      <p>Fill in your trip details and click <strong>Generate Itinerary</strong> to get started.</p>
+    </div>
+
+    <!-- Loading panel -->
+    <div id="loading-panel">
+      <h2>Planning your trip...</h2>
+      <div class="step" id="step-weather">
+        <div class="step-icon pending" id="step-weather-icon">1</div>
+        <div>
+          <div class="step-label">Fetching live weather</div>
+          <div class="step-sub" id="step-weather-sub">Checking forecast for your trip dates...</div>
+        </div>
+      </div>
+      <div class="step" id="step-generate">
+        <div class="step-icon pending" id="step-generate-icon">2</div>
+        <div>
+          <div class="step-label">Generating itinerary</div>
+          <div class="step-sub">Writing your personalised day-by-day plan...</div>
+        </div>
+      </div>
+      <div class="step" id="step-budget">
+        <div class="step-icon pending" id="step-budget-icon">3</div>
+        <div>
+          <div class="step-label">Calculating budget breakdown</div>
+          <div class="step-sub">Extracting and categorising estimated costs...</div>
+        </div>
+      </div>
+      <div id="stream-preview"></div>
+    </div>
+
+    <!-- Tabs panel -->
+    <div id="tabs-panel">
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('itinerary')">Itinerary</button>
+        <button class="tab-btn" onclick="switchTab('budget')">Budget Dashboard</button>
+      </div>
+
+      <div id="tab-itinerary" class="tab-content active">
+        <div id="itinerary-content"></div>
+        <button id="download-btn" onclick="downloadMarkdown()">⬇ Download as Markdown</button>
+      </div>
+
+      <div id="tab-budget" class="tab-content">
+        <div id="budget-no-data" style="display:none; color:#94a3b8; padding:20px 0;">
+          No cost estimates were found in the itinerary.
+        </div>
+        <div id="budget-dashboard" style="display:none;">
+          <div class="metrics-row">
+            <div class="metric-card">
+              <div class="metric-label">Total Estimated</div>
+              <div class="metric-value" id="m-total"></div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Budget Range</div>
+              <div class="metric-value" id="m-range"></div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">vs Mid-Budget</div>
+              <div class="metric-value" id="m-diff"></div>
+              <div class="metric-sub" id="m-diff-sub"></div>
+            </div>
+            <div class="metric-card">
+              <div class="metric-label">Trip Length</div>
+              <div class="metric-value" id="m-days"></div>
+            </div>
+          </div>
+          <div class="chart-card">
+            <h3>Daily Spend by Category</h3>
+            <canvas id="budget-chart" height="100"></canvas>
+          </div>
+          <div class="cat-row" id="cat-totals"></div>
+          <div class="chart-card">
+            <h3>Day-by-Day Breakdown</h3>
+            <table id="breakdown-table">
+              <thead><tr><th>Day</th><th>Food</th><th>Activities</th><th>Transport</th><th>Other</th><th>Total</th></tr></thead>
+              <tbody></tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Chat -->
+    <div id="chat-section">
+      <div id="chat-header">
+        Refine your itinerary
+        <span style="font-size:0.75rem; color:#94a3b8; font-weight:400; margin-left:8px;">
+          Full context is always sent — changes stay consistent
+        </span>
+      </div>
+      <div id="chat-messages"></div>
+      <div id="chat-input-row">
+        <input type="text" id="chat-input" placeholder="e.g. Swap day 2 afternoon for something more relaxing"
+               onkeydown="if(event.key==='Enter')handleRefine()" />
+        <button id="chat-send" onclick="handleRefine()">Send</button>
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<script>
+  // ── State ──────────────────────────────────────────────
+  const state = {
+    itinerary: null,
+    budgetData: null,
+    chatHistory: [],
+    currency: 'USD',
+    budgetMin: 1000,
+    budgetMax: 5000,
+    startDate: null,
+    endDate: null,
+  };
+
+  let budgetChart = null;
+
+  const FITNESS_LEVELS = ['Very low', 'Low', 'Moderate', 'High', 'Very high'];
+
+  // ── Helpers ────────────────────────────────────────────
+  function getChecked(cls) {
+    return [...document.querySelectorAll(`.${cls}:checked`)].map(el => el.value);
+  }
+
+  function setStepState(id, status, subText) {
+    const icon = document.getElementById(`step-${id}-icon`);
+    icon.className = `step-icon ${status}`;
+    icon.textContent = status === 'done' ? '✓' : status === 'skip' ? '–' : icon.textContent;
+    if (subText) document.querySelector(`#step-${id} .step-sub`).textContent = subText;
+  }
+
+  async function consumeSSE(response, onData) {
+    const reader = response.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = '';
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const events = buffer.split('\n\n');
+      buffer = events.pop();
+      for (const event of events) {
+        const line = event.trim();
+        if (line.startsWith('data: ')) {
+          try { onData(JSON.parse(line.slice(6))); } catch {}
+        }
+      }
+    }
+  }
+
+  // ── Destinations ───────────────────────────────────────
+  function addDestination() {
+    const list = document.getElementById('destinations-list');
+    const row = document.createElement('div');
+    row.className = 'dest-row';
+    row.innerHTML = `<input type="text" placeholder="City, Country" />
+      <button class="dest-remove" onclick="this.parentElement.remove()">×</button>`;
+    list.appendChild(row);
+  }
+
+  function toggleChildAges() {
+    const n = parseInt(document.getElementById('children').value);
+    document.getElementById('children-ages-row').style.display = n > 0 ? 'block' : 'none';
+  }
+
+  // ── Tab switching ──────────────────────────────────────
+  function switchTab(name) {
+    document.querySelectorAll('.tab-btn').forEach((b, i) => {
+      b.classList.toggle('active', ['itinerary','budget'][i] === name);
+    });
+    document.getElementById('tab-itinerary').classList.toggle('active', name === 'itinerary');
+    document.getElementById('tab-budget').classList.toggle('active', name === 'budget');
+  }
+
+  // ── Render itinerary ───────────────────────────────────
+  function renderItinerary(text) {
+    document.getElementById('itinerary-content').innerHTML = marked.parse(text);
+  }
+
+  // ── Render budget dashboard ────────────────────────────
+  function renderBudgetDashboard(data, currency, budgetMin, budgetMax, startDate, endDate) {
+    const cats = ['food', 'activities', 'transport', 'other'];
+    const colors = ['#FF6B6B', '#4ECDC4', '#45B7D1', '#96CEB4'];
+    const catLabels = ['Food', 'Activities', 'Transport', 'Other'];
+
+    const total = data.reduce((s, d) => s + cats.reduce((a, c) => a + (d[c] || 0), 0), 0);
+    const mid = (budgetMin + budgetMax) / 2;
+    const diff = total - mid;
+    const days = startDate && endDate
+      ? Math.round((new Date(endDate) - new Date(startDate)) / 86400000)
+      : data.length;
+
+    document.getElementById('m-total').textContent = `${total.toLocaleString()} ${currency}`;
+    document.getElementById('m-range').textContent = `${budgetMin.toLocaleString()}–${budgetMax.toLocaleString()} ${currency}`;
+    document.getElementById('m-diff').textContent = `${Math.abs(diff).toLocaleString()} ${currency}`;
+    const diffSub = document.getElementById('m-diff-sub');
+    diffSub.textContent = diff > 0 ? 'over mid-budget' : 'under mid-budget';
+    diffSub.className = `metric-sub ${diff > 0 ? 'over' : 'under'}`;
+    document.getElementById('m-days').textContent = `${days} day${days !== 1 ? 's' : ''}`;
+
+    // Chart
+    if (budgetChart) budgetChart.destroy();
+    const ctx = document.getElementById('budget-chart').getContext('2d');
+    budgetChart = new Chart(ctx, {
+      type: 'bar',
+      data: {
+        labels: data.map(d => d.label || `Day ${d.day}`),
+        datasets: cats.map((cat, i) => ({
+          label: catLabels[i],
+          data: data.map(d => d[cat] || 0),
+          backgroundColor: colors[i],
+          borderRadius: i === cats.length - 1 ? { topLeft: 4, topRight: 4 } : 0,
+        })),
+      },
+      options: {
+        responsive: true,
+        plugins: { legend: { position: 'bottom' }, tooltip: { mode: 'index' } },
+        scales: {
+          x: { stacked: true, grid: { display: false } },
+          y: { stacked: true, ticks: { callback: v => `${v} ${currency}` } },
+        },
+      },
+    });
+
+    // Category totals
+    const catDiv = document.getElementById('cat-totals');
+    catDiv.innerHTML = cats.map((cat, i) => {
+      const catTotal = data.reduce((s, d) => s + (d[cat] || 0), 0);
+      const pct = total ? Math.round(catTotal / total * 100) : 0;
+      return `<div class="cat-card">
+        <div class="cat-label"><span class="cat-dot" style="background:${colors[i]}"></span>${catLabels[i]}</div>
+        <div class="cat-value">${catTotal.toLocaleString()} ${currency}</div>
+        <div class="cat-pct">${pct}% of total</div>
+      </div>`;
+    }).join('');
+
+    // Table
+    const tbody = document.querySelector('#breakdown-table tbody');
+    const maxTotal = Math.max(...data.map(d => cats.reduce((s, c) => s + (d[c] || 0), 0)));
+    tbody.innerHTML = data.map(d => {
+      const rowTotal = cats.reduce((s, c) => s + (d[c] || 0), 0);
+      const highlight = rowTotal === maxTotal ? ' class="highlight"' : '';
+      return `<tr>
+        <td>${d.label || `Day ${d.day}`}</td>
+        ${cats.map(c => `<td>${(d[c] || 0).toLocaleString()} ${currency}</td>`).join('')}
+        <td${highlight}>${rowTotal.toLocaleString()} ${currency}</td>
+      </tr>`;
+    }).join('');
+
+    document.getElementById('budget-no-data').style.display = 'none';
+    document.getElementById('budget-dashboard').style.display = 'block';
+  }
+
+  // ── Generate ───────────────────────────────────────────
+  async function handleGenerate() {
+    const destinations = [...document.querySelectorAll('#destinations-list input')]
+      .map(i => i.value.trim()).filter(Boolean);
+    const startDate = document.getElementById('start-date').value;
+    const endDate = document.getElementById('end-date').value;
+
+    if (!destinations.length) return alert('Please enter at least one destination.');
+    if (!startDate || !endDate) return alert('Please select start and end dates.');
+    if (startDate >= endDate) return alert('End date must be after start date.');
+
+    const currency = document.getElementById('currency').value;
+    const budgetMin = parseInt(document.getElementById('budget-min').value) || 0;
+    const budgetMax = parseInt(document.getElementById('budget-max').value) || 0;
+
+    state.currency = currency;
+    state.budgetMin = budgetMin;
+    state.budgetMax = budgetMax;
+    state.startDate = startDate;
+    state.endDate = endDate;
+    state.chatHistory = [];
+    state.itinerary = null;
+    state.budgetData = null;
+
+    // Reset UI
+    document.getElementById('empty-state').style.display = 'none';
+    document.getElementById('tabs-panel').style.display = 'none';
+    document.getElementById('chat-section').style.display = 'none';
+    document.getElementById('loading-panel').style.display = 'block';
+    document.getElementById('weather-badge').style.display = 'none';
+    document.getElementById('stream-preview').textContent = '';
+    document.getElementById('chat-messages').innerHTML = '';
+    document.getElementById('btn-generate').disabled = true;
+    setStepState('weather', 'active', 'Checking forecast for your trip dates...');
+    setStepState('generate', 'pending', 'Writing your personalised day-by-day plan...');
+    setStepState('budget', 'pending', 'Extracting and categorising estimated costs...');
+
+    const requestData = {
+      destinations,
+      start_date: startDate,
+      end_date: endDate,
+      adults: parseInt(document.getElementById('adults').value),
+      children: parseInt(document.getElementById('children').value),
+      children_ages: document.getElementById('children-ages').value,
+      elderly: parseInt(document.getElementById('elderly').value),
+      currency,
+      budget_min: budgetMin,
+      budget_max: budgetMax,
+      dietary: getChecked('dietary'),
+      mobility: getChecked('mobility'),
+      fitness: FITNESS_LEVELS[parseInt(document.getElementById('fitness').value)],
+      other_restrictions: document.getElementById('other-restrictions').value,
+      must_dos: document.getElementById('must-dos').value,
+      general_interests: document.getElementById('general-interests').value,
+    };
+
+    let fullText = '';
+
+    try {
+      const response = await fetch('/api/generate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(requestData),
+      });
+
+      await consumeSSE(response, (data) => {
+        if (data.type === 'weather') {
+          if (data.loaded) {
+            setStepState('weather', 'done', 'Live forecast loaded.');
+            document.getElementById('weather-badge').style.display = 'inline-flex';
+          } else {
+            setStepState('weather', 'skip', 'No forecast — trip is more than 7 days away.');
+          }
+          setStepState('generate', 'active', 'Writing your personalised day-by-day plan...');
+        } else if (data.type === 'chunk') {
+          fullText += data.text;
+          document.getElementById('stream-preview').textContent = fullText.slice(-600);
+          document.getElementById('stream-preview').scrollTop = 9999;
+        } else if (data.type === 'done') {
+          setStepState('generate', 'done', 'Itinerary complete.');
+          setStepState('budget', 'active', 'Extracting and categorising estimated costs...');
+        }
+      });
+
+      state.itinerary = fullText;
+
+      // Fetch budget
+      const budgetResp = await fetch('/api/budget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itinerary: fullText, currency }),
+      });
+      const budgetJson = await budgetResp.json();
+      state.budgetData = budgetJson.data;
+      setStepState('budget', 'done', 'Budget breakdown ready.');
+
+    } catch (err) {
+      alert('Something went wrong: ' + err.message);
+      document.getElementById('btn-generate').disabled = false;
+      return;
+    }
+
+    // Show results
+    document.getElementById('loading-panel').style.display = 'none';
+    document.getElementById('tabs-panel').style.display = 'block';
+    document.getElementById('chat-section').style.display = 'block';
+    document.getElementById('btn-generate').disabled = false;
+
+    renderItinerary(state.itinerary);
+
+    if (state.budgetData && state.budgetData.length) {
+      renderBudgetDashboard(state.budgetData, currency, budgetMin, budgetMax, startDate, endDate);
+    } else {
+      document.getElementById('budget-no-data').style.display = 'block';
+      document.getElementById('budget-dashboard').style.display = 'none';
+    }
+  }
+
+  // ── Refine ─────────────────────────────────────────────
+  async function handleRefine() {
+    const input = document.getElementById('chat-input');
+    const userRequest = input.value.trim();
+    if (!userRequest || !state.itinerary) return;
+
+    input.value = '';
+    document.getElementById('chat-send').disabled = true;
+
+    // Add user message
+    addChatMessage('user', userRequest);
+    state.chatHistory.push({ role: 'user', content: userRequest });
+
+    // Add assistant placeholder
+    const assistantBubble = addChatMessage('assistant', '');
+
+    let fullText = '';
+
+    try {
+      const response = await fetch('/api/refine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          itinerary: state.itinerary,
+          chat_history: state.chatHistory.slice(0, -1),
+          user_request: userRequest,
+        }),
+      });
+
+      await consumeSSE(response, (data) => {
+        if (data.type === 'chunk') {
+          fullText += data.text;
+          assistantBubble.innerHTML = marked.parse(fullText);
+          document.getElementById('chat-messages').scrollTop = 9999;
+        }
+      });
+
+      state.itinerary = fullText;
+      state.chatHistory.push({ role: 'assistant', content: userRequest });
+
+      renderItinerary(fullText);
+
+      // Refresh budget
+      const budgetResp = await fetch('/api/budget', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ itinerary: fullText, currency: state.currency }),
+      });
+      const budgetJson = await budgetResp.json();
+      state.budgetData = budgetJson.data;
+      if (state.budgetData && state.budgetData.length) {
+        renderBudgetDashboard(state.budgetData, state.currency, state.budgetMin, state.budgetMax, state.startDate, state.endDate);
+      }
+
+    } catch (err) {
+      assistantBubble.textContent = 'Error: ' + err.message;
+    }
+
+    document.getElementById('chat-send').disabled = false;
+    input.focus();
+  }
+
+  function addChatMessage(role, content) {
+    const messages = document.getElementById('chat-messages');
+    const div = document.createElement('div');
+    div.className = `chat-msg ${role}`;
+    const bubble = document.createElement('div');
+    bubble.className = 'chat-bubble';
+    bubble.innerHTML = content ? marked.parse(content) : '';
+    const avatar = document.createElement('div');
+    avatar.className = 'chat-avatar';
+    avatar.textContent = role === 'user' ? 'You' : 'AI';
+    div.appendChild(avatar);
+    div.appendChild(bubble);
+    messages.appendChild(div);
+    messages.scrollTop = messages.scrollHeight;
+    return bubble;
+  }
+
+  // ── Download ───────────────────────────────────────────
+  function downloadMarkdown() {
+    if (!state.itinerary) return;
+    const blob = new Blob([state.itinerary], { type: 'text/markdown' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = 'itinerary.md';
+    a.click();
+  }
+
+  // ── Init dates ─────────────────────────────────────────
+  (function initDates() {
+    const today = new Date();
+    const plus4 = new Date(today);
+    plus4.setDate(plus4.getDate() + 4);
+    const fmt = d => d.toISOString().split('T')[0];
+    document.getElementById('start-date').value = fmt(today);
+    document.getElementById('end-date').value = fmt(plus4);
+  })();
+</script>
+</body>
+</html>

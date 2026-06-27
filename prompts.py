@@ -61,7 +61,14 @@ def build_trip_context(
 </trip>"""
 
 
-def build_itinerary_prompt(trip_context: str, currency: str, fitness: str) -> str:
+def build_itinerary_prompt(trip_context: str, currency: str, fitness: str, weather_context: str = "") -> str:
+    weather_section = f"""
+<live_weather>
+  The following is the actual forecast for the trip dates. Use it to tailor activities and tips — suggest indoor alternatives on rainy or stormy days, flag extreme heat or cold, and note conditions that affect specific outdoor plans.
+{weather_context}
+</live_weather>
+""" if weather_context else ""
+
     return f"""You are an expert travel planner with deep local knowledge. Your task is to produce a practical, enjoyable, and realistic day-by-day itinerary.
 
 <instructions>
@@ -71,12 +78,13 @@ def build_itinerary_prompt(trip_context: str, currency: str, fitness: str) -> st
   <restrictions>Respect every dietary and accessibility restriction in every recommendation — meals, activities, and transport.</restrictions>
   <booking>Flag any activity that requires advance booking with "(book ahead)".</booking>
   <authenticity>Prefer local and authentic experiences over tourist traps.</authenticity>
+  <weather>If live weather data is provided, adjust activity choices and tips to reflect actual forecast conditions.</weather>
 </instructions>
 
 <trip_details>
 {trip_context}
 </trip_details>
-
+{weather_section}
 <output_format>
 Use this exact structure for every day. Do not deviate from it.
 
